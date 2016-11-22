@@ -1,14 +1,14 @@
-#include "cnn/nodes.h"
-#include "cnn/cnn.h"
-#include "cnn/training.h"
-#include "cnn/timing.h"
-#include "cnn/rnn.h"
-#include "cnn/gru.h"
-#include "cnn/lstm.h"
-#include "cnn/dict.h"
-#include "cnn/expr.h"
-#include "cnn/cfsm-builder.h"
-#include "cnn/hsm-builder.h"
+#include "dynet/nodes.h"
+#include "dynet/dynet.h"
+#include "dynet/training.h"
+#include "dynet/timing.h"
+#include "dynet/rnn.h"
+#include "dynet/gru.h"
+#include "dynet/lstm.h"
+#include "dynet/dict.h"
+#include "dynet/expr.h"
+#include "dynet/cfsm-builder.h"
+#include "dynet/hsm-builder.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -26,10 +26,10 @@
 #include <boost/archive/binary_oarchive.hpp>
 
 using namespace std;
-using namespace cnn;
+using namespace dynet;
 
-cnn::Dict sourceD;
-cnn:: Dict targetD;
+dynet::Dict sourceD;
+dynet:: Dict targetD;
 int kSOS;
 int kSOS2;
 int kEOS;
@@ -48,11 +48,11 @@ unsigned VOCAB_SIZE = 0;
 
 template <class Builder>
 struct EncoderDecoder {
-	LookupParameters* p_c;
-	Parameters* p_enc2dec;
-	Parameters* p_decbias;
-	Parameters* p_enc2out;
-	Parameters* p_outbias;
+	LookupParameter p_c;
+	Parameter p_enc2dec;
+	Parameter p_decbias;
+	Parameter p_enc2out;
+	Parameter p_outbias;
 	Builder r2lbuilder;
 	Builder l2rbuilder;
 	Builder outbuilder;
@@ -73,7 +73,7 @@ struct EncoderDecoder {
     	vector<Expression> left;
 
     	for (unsigned t = 0; t < slen; ++t) {
-		//cerr << "==" << sourceD.Convert(tokens[t])<< "\n";
+		//cerr << "==" << sourceD.convert(tokens[t])<< "\n";
     		Expression word_lookup = lookup(cg, p_c, tokens[t]);
     		l2rbuilder.add_input(word_lookup);
     		left.push_back(l2rbuilder.back());
@@ -85,7 +85,7 @@ struct EncoderDecoder {
     	deque<Expression> right;
 
     	for (unsigned t = 0; t < slen; ++t) {
-		//cerr << "==" << sourceD.Convert(tokens[slen - t - 1])<< "\n";
+		//cerr << "==" << sourceD.convert(tokens[slen - t - 1])<< "\n";
     		Expression word_lookup = lookup(cg, p_c, tokens[slen - t - 1]);
     		r2lbuilder.add_input(word_lookup);
     		right.push_front(r2lbuilder.back());
@@ -122,7 +122,7 @@ struct EncoderDecoder {
     	Expression h_t = outbuilder.add_input(lookup(cg, p_c, kSOS2));
     	for (unsigned t = 0; t < target_len; ++t) {
     		//Expression outback = outbuilder.back();
-		//cerr << "==" << targetD.Convert(target_tokens[t])<< "\n";
+		//cerr << "==" << targetD.convert(target_tokens[t])<< "\n";
     		Expression affine_outback = affine_transform({outbias, enc2out, h_t});
     		errs[t] = pickneglogsoftmax(affine_outback, target_tokens[t]);
     		Expression x_t = lookup(cg, p_c, target_tokens[t]);
@@ -141,7 +141,7 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	//cerr << "TEST SIZE " << test_sents.size() << endl;
   for(int i = 0; i < test_sents.size(); ++i) {
   	//for (int j = 0; j < test_sents[i].size(); ++j) {
-  	//	cerr << sourceD.Convert(test_sents[i][j]) << " ";
+  	//	cerr << sourceD.convert(test_sents[i][j]) << " ";
   	//}
   	//cerr << "\n";
   	ComputationGraph cg;
@@ -169,7 +169,7 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	    	count++;
 	  	Expression u_t = affine_transform({outbias, enc2out, h_t});
 	  	Expression probs_embedding = log_softmax(u_t);
-	  	vector<float> probs = as_vector(cg.incremental_forward());
+	  	vector<float> probs = as_vector(cg.incremental_forward(probs_embedding));
 	  	vector<pair<float, int>> prob_idx; // probabilities and indices
 	  	for (int k = 0; k < probs.size(); ++k) {
 	  	  prob_idx.push_back(make_pair(probs[k], k));
@@ -177,8 +177,8 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	  	}
 	  	sort(prob_idx.begin(), prob_idx.end(), comparator);
 	  	translation = prob_idx[0].second;
-	  	//cerr << targetD.Convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
-	  	trans_sent.append(targetD.Convert(translation));
+	  	//cerr << targetD.convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
+	  	trans_sent.append(targetD.convert(translation));
 	  	trans_sent.append(" ");
 	  	Expression x_t = lookup(cg, tr.p_c, translation);
 	  	h_t = tr.outbuilder.add_input(x_t);
@@ -191,7 +191,7 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 }
 
 int main(int argc, char** argv) {
-	cnn::Initialize(argc, argv);
+	dynet::initialize(argc, argv);
 	bool isTrain = true;
 	if (argc == 8){
 	  if (!strcmp(argv[7], "-t")) {
@@ -204,10 +204,10 @@ int main(int argc, char** argv) {
 	}
 	if (isTrain) {
 		Model model;
-		kSOS = sourceD.Convert("<s>");
-		kEOS = sourceD.Convert("</s>");
-		kSOS2 = targetD.Convert("<s>");
-		kEOS2 = targetD.Convert("</s>");
+		kSOS = sourceD.convert("<s>");
+		kEOS = sourceD.convert("</s>");
+		kSOS2 = targetD.convert("<s>");
+		kEOS2 = targetD.convert("</s>");
 		vector<vector<int>> train_source, train_target;
 		vector<vector<int>> dev_source, dev_target;
 		vector<vector<int>> test_source;
@@ -218,22 +218,22 @@ int main(int argc, char** argv) {
 		  vector<int> x;
 		  string line;
 		  while(getline(in, line)) {
-		    x = ReadSentence(line, &sourceD);
+		    x = read_sentence(line, &sourceD);
 		    train_source.push_back(x);
 		  }
 		}
-		sourceD.Freeze();
+		sourceD.freeze();
 		{
 		  ifstream in(argv[2]);
 		  assert(in);
 		  vector<int> x;
 		  string line;
 		  while(getline(in, line)) {
-		    x = ReadSentence(line, &targetD);
+		    x = read_sentence(line, &targetD);
 		    train_target.push_back(x);
 		  }
 		}
-		targetD.Freeze();
+		targetD.freeze();
 		VOCAB_SIZE = targetD.size() + sourceD.size();
 		ofstream out("targetDict");
 		boost::archive::text_oarchive oa(out);
@@ -247,7 +247,7 @@ int main(int argc, char** argv) {
 		  vector<int> x;
 		  string line;
 		  while(getline(in, line)) {
-		    x = ReadSentence(line, &sourceD);
+		    x = read_sentence(line, &sourceD);
 		    dev_source.push_back(x);
 		  }
 		}
@@ -257,7 +257,7 @@ int main(int argc, char** argv) {
 		  vector<int> x;
 		  string line;
 		  while(getline(in, line)) {
-		    x = ReadSentence(line, &targetD);
+		    x = read_sentence(line, &targetD);
 		    dev_target.push_back(x);
 		  }
 		}	
@@ -267,7 +267,7 @@ int main(int argc, char** argv) {
 		  vector<int> x;
 		  string line;
 		  while(getline(in, line)) {
-		    x = ReadSentence(line, &sourceD);
+		    x = read_sentence(line, &sourceD);
 		    test_source.push_back(x);
 		  }
 		}	
@@ -300,9 +300,9 @@ int main(int argc, char** argv) {
 	    		++si;
 	    		ttags += target_sent.size();
 	    		tsize += 1;
-	    		lm.BuildGraph(source_sent, target_sent, cg);
-	    		loss += as_scalar(cg.incremental_forward());
-				cg.backward();
+	    		Expression loss_expr = lm.BuildGraph(source_sent, target_sent, cg);
+	    		loss += as_scalar(cg.incremental_forward(loss_expr));
+				cg.backward(loss_expr);
 				sgd->update(1.0);
 			}
 			//sgd->status();
@@ -316,8 +316,8 @@ int main(int argc, char** argv) {
 			         const auto& x = dev_source[di];
 			         const auto& y = dev_target[di];
 			         ComputationGraph cg;
-			         lm.BuildGraph(x, y, cg);
-			         dloss += as_scalar(cg.incremental_forward());
+			         Expression dloss_expr = lm.BuildGraph(x, y, cg);
+			         dloss += as_scalar(cg.incremental_forward(dloss_expr));
 			         dtags += y.size();
 			       }
 			       if (dloss < best) {
@@ -360,7 +360,7 @@ int main(int argc, char** argv) {
 						cerr << "\n";
 			
 				       for (unsigned ti = 0; ti < dev_target[di].size(); ++ti){
-							cerr << targetD.Convert(dev_target[di][ti]) << " ";
+							cerr << targetD.convert(dev_target[di][ti]) << " ";
 						
 					}
 					cerr << "\n=============\n";
@@ -387,8 +387,8 @@ int main(int argc, char** argv) {
 
 
 
-	 sourceD.Freeze();
-	 targetD.Freeze();
+	 sourceD.freeze();
+	 targetD.freeze();
 	 VOCAB_SIZE = targetD.size();
 
 	 vector<vector<int>> test_source;
@@ -403,7 +403,7 @@ int main(int argc, char** argv) {
 	   vector<int> x;
 	   string line;
 	   while(getline(in, line)) {
-	     x = ReadSentence(line, &sourceD);
+	     x = read_sentence(line, &sourceD);
 	     test_source.push_back(x);
 	   }
 	 }
