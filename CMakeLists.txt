@@ -30,8 +30,9 @@ set(LIBS ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
 
 add_subdirectory(dynet)
 ADD_EXECUTABLE(encoderdecoder encoderdecoder.cc)
-
+ADD_EXECUTABLE(encoderdecoder_vectors encoderdecoder_vectors.cc)
 target_link_libraries(encoderdecoder dynet ${LIBS})
+target_link_libraries(encoderdecoder_vectors dynet ${LIBS})
 
 
 
