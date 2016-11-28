@@ -193,13 +193,13 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 int main(int argc, char** argv) {
 	dynet::initialize(argc, argv);
 	bool isTrain = true;
-	if (argc == 8){
-	  if (!strcmp(argv[7], "-t")) {
+	if (argc == 9){
+	  if (!strcmp(argv[8], "-t")) {
 	    isTrain = false;
 	  }
 	}
 	if (argc != 5 && argc != 6 && argc != 7 && argc != 8) {
-	  cerr << "Usage: " << argv[0] << " train.source train.target dev.source dev.target [test.source] [model.params] [-t]\n";
+	  cerr << "Usage: " << argv[0] << " train.source train.target dev.source dev.target [test.source] output.model [input.model] [-t]\n";
 	  return 1;
 	}
 	if (isTrain) {
@@ -223,6 +223,7 @@ int main(int argc, char** argv) {
 		  }
 		}
 		sourceD.freeze();
+                sourceD.set_unk("<UNK>");
 		{
 		  ifstream in(argv[2]);
 		  assert(in);
@@ -234,6 +235,7 @@ int main(int argc, char** argv) {
 		  }
 		}
 		targetD.freeze();
+                targetD.set_unk("<UNK>");
 		VOCAB_SIZE = targetD.size() + sourceD.size();
 		ofstream out("targetDict");
 		boost::archive::text_oarchive oa(out);
@@ -270,12 +272,19 @@ int main(int argc, char** argv) {
 		    x = read_sentence(line, &sourceD);
 		    test_source.push_back(x);
 		  }
-		}	
+		}
+                if (argc >= 8) {
+                  cerr << "Reading parameters from " << argv[7] << "...\n";
+                  ifstream in(argv[7]);
+                  assert(in);
+		  boost::archive::text_iarchive ia(in);
+        	  ia >> model;
+                }	
 		Trainer* sgd = new SimpleSGDTrainer(&model);
 		sgd->eta_decay = 0.08;
 		EncoderDecoder<LSTMBuilder> lm(model);
 		double best = 9e+99;
-		unsigned report_every_i = 100 ;
+		unsigned report_every_i = 500 ;
 	    unsigned dev_every_i_reports = 25;
 	    unsigned si = train_source.size();
 	    vector<unsigned> order(train_source.size());
@@ -305,8 +314,8 @@ int main(int argc, char** argv) {
 				cg.backward(loss_expr);
 				sgd->update(1.0);
 			}
-			//sgd->status();
-			//cerr << " E = " << (loss / ttags) << " ppl=" << exp(loss / ttags) << "\n";
+			sgd->status();
+			cerr << " E = " << (loss / ttags) << " ppl=" << exp(loss / ttags) << "\n";
 			report++;
 			if (report % dev_every_i_reports == 0) {
 			       double dloss = 0;
