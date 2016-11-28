@@ -1,24 +1,46 @@
 
-from nltk import tokenize
+
 from random import shuffle
 
 def main():
+    l1filename = "/Users/elliotschumacher/Downloads/hu-en/europarl-v7.hu-en.en"
+    l2filename = "/Users/elliotschumacher/Downloads/hu-en/europarl-v7.hu-en.hu"
+    pairs = []
+    emptylines = 0
+    with open(l1filename) as l1file, open(l2filename) as l2file:
+        for line1, line2 in zip(l1file, l2file):
+            if line1.strip() == "" and line2.strip() == "":
+                emptylines += 1
+            else:
 
-    for t in ["dev", "train", "test"]:
-        l1filename = "/Users/elliotschumacher/Dropbox/git/10-807-Project-Group/hu-en/europarl-v7.hu-en.en_{0}_tok".format(t)
-        l2filename = "/Users/elliotschumacher/Dropbox/git/10-807-Project-Group/hu-en/europarl-v7.hu-en.hu_{0}_tok".format(t)
-        loutput = "/Users/elliotschumacher/Dropbox/git/10-807-Project-Group/hu-en/europarl-v7.hu-en.comb_{0}_tok".format(t)
-        with open(l1filename) as l1file, open(l2filename) as l2file, open(loutput, "w") as loutf:
-            emptylines = 0
+                pairs.append((line1, line2))
+    shuffle(pairs)
+    numlines = len(pairs)
+    train = int(float(numlines) * 0.7)
+    dev = train + int(float(numlines) * 0.15)
+    test = dev + int(float(numlines) * 0.15)
 
-            for line1, line2 in zip(l1file, l2file):
-                line1 = line1.lower()
-                line2 = line2.lower()
-                if line1.strip() == "" or line2.strip() == "":
-                    emptylines += 1
-                else:
-                    loutf.write("{0} ||| {1}\n".format(line1.rstrip(), line2.rstrip()))
-            print(emptylines)
+    trainlines = pairs[:train]
+    devlines = pairs[train:dev]
+    testlines = pairs[dev:]
+
+    print(emptylines)
+
+    with open(l1filename + "_train", "w") as l1train, open(l2filename + "_train", "w") as l2train:
+        for l1, l2 in trainlines:
+            l1train.write(l1)
+            l2train.write(l2)
+
+    with open(l1filename + "_dev", "w") as l1train, open(l2filename + "_dev", "w") as l2train:
+        for l1, l2 in devlines:
+            l1train.write(l1)
+            l2train.write(l2)
+
+    with open(l1filename + "_test", "w") as l1train, open(l2filename + "_test", "w") as l2train:
+        for l1, l2 in testlines:
+            l1train.write(l1)
+            l2train.write(l2)
+
 
 
 
