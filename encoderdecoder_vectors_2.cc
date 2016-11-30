@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
 		  vector<float> vects;
 
 		  read_vectorfile(line, word, &vects, &targetD);
-		  assert(vects.size() == WORD_VECTOR_DIM);
+		  //assert(vects.size() == WORD_VECTOR_DIM);
 		  word_vectors_target[word] = vects;
 		}
 		cerr << "Word vectors: " << word_vectors_target.size() << endl;
@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
 		sgd->eta_decay = 0.08;
 		EncoderDecoder<LSTMBuilder> lm(model);
 		double best = 9e+99;
-		unsigned report_every_i = 1 ;
+		unsigned report_every_i = 100 ;
 	    unsigned dev_every_i_reports = 5;
 	    unsigned si = train_source.size();
 	    vector<unsigned> order(train_source.size());
@@ -421,7 +421,7 @@ int main(int argc, char** argv) {
 			         cerr << endl;
 			         cerr << "Current dev performance exceeds previous best, saving model" << endl;
 			         best = dloss;
-			         ofstream out("EDmodel");
+			         ofstream out(argv[8]);
 			         boost::archive::binary_oarchive oa(out);
 			         oa << model;
 

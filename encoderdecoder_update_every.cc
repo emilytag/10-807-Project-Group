@@ -317,6 +317,15 @@ int main(int argc, char** argv) {
 			sgd->status();
 			cerr << " E = " << (loss / ttags) << " ppl=" << exp(loss / ttags) << "\n";
 			report++;
+                        if (loss < best) {
+                                 cerr << endl;
+                                 cerr << "Current performance exceeds previous best, saving model" << endl;
+                                 best = loss;
+                                 ofstream out(argv[6]);
+                                 boost::archive::binary_oarchive oa(out);
+                                 oa << model;
+			}
+			/*
 			if (report % dev_every_i_reports == 0) {
 			       double dloss = 0;
 			       unsigned dtags = 0;
@@ -333,7 +342,7 @@ int main(int argc, char** argv) {
 			         cerr << endl;
 			         cerr << "Current dev performance exceeds previous best, saving model" << endl;
 			         best = dloss;
-			         ofstream out(argv[6]);
+			         ofstream out("EDmodel");
 			         boost::archive::binary_oarchive oa(out);
 			         oa << model;
 
@@ -376,8 +385,8 @@ int main(int argc, char** argv) {
 				}
 
 			       cerr << "***DEV [epoch=" << (tsize / (double)train_source.size()) << "] E = " << (dloss / dtags) << " ppl=" << exp(dloss / dtags) << "\n" << ' ';
-			     }
-			 }
+			    }
+			 }*/
 		}
 	}
 	 else {
