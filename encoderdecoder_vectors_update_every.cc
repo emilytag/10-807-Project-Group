@@ -63,6 +63,8 @@ struct EncoderDecoder {
 	Builder l2rbuilder;
 	Builder outbuilder;
 
+	//EncoderDecoder() {}
+
 	explicit EncoderDecoder(Model& model): l2rbuilder(IN_LAYERS, WORD_VECTOR_DIM, HIDDEN_DIM, &model),
 	r2lbuilder(IN_LAYERS, WORD_VECTOR_DIM, HIDDEN_DIM, &model), outbuilder(OUT_LAYERS, WORD_VECTOR_DIM, HIDDEN_DIM, &model) {
 		p_c_source = model.add_lookup_parameters(sourceD.size(), {WORD_VECTOR_DIM});
@@ -236,13 +238,13 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	  	}
 	  	sort(prob_idx.begin(), prob_idx.end(), comparator);
 	  	translation = prob_idx[0].second;
-	  	//cerr << targetD.convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
+	  	cerr << targetD.convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
 	  	trans_sent.append(targetD.convert(translation));
 	  	trans_sent.append(" ");
 	  	Expression x_t = lookup(cg, tr.p_c_target, translation);
 	  	h_t = tr.outbuilder.add_input(x_t);
  	 }
-	//cerr << "TRANS SENT " << trans_sent << endl;
+	cerr << trans_sent << endl;
 	trans_sents.push_back(trans_sent);
   }
   cerr << "\n"; 
@@ -263,6 +265,7 @@ int main(int argc, char** argv) {
 	}
 	if (isTrain) {
 		Model model;
+		Trainer* sgd = new SimpleSGDTrainer(&model);
 		kSOS = sourceD.convert("<s>");
 		kEOS = sourceD.convert("</s>");
 		kSOS2 = targetD.convert("<s>");
@@ -325,10 +328,11 @@ int main(int argc, char** argv) {
 		targetD.freeze();
                 targetD.set_unk("<UNK>");
 		VOCAB_SIZE = targetD.size() + sourceD.size();
-		ofstream out("targetDict");
+		std::string name = argv[8];
+		ofstream out(name+".target");
 		boost::archive::text_oarchive oa(out);
 		oa << targetD;
-		ofstream out2("sourceDict");
+		ofstream out2(name+".source");
 		boost::archive::text_oarchive oa2(out2);
 		oa2 << sourceD;
 		{
@@ -360,17 +364,18 @@ int main(int argc, char** argv) {
 		    x = read_sentence(line, &sourceD);
 		    test_source.push_back(x);
 		  }
-		}  	
+		} 
+		EncoderDecoder<LSTMBuilder> lm(model); 	
                 if (argc >= 10) {
                   cerr << "Reading parameters from " << argv[9] << "...\n";
                   ifstream in(argv[9]);
                   assert(in);
-		  boost::archive::text_iarchive ia(in);
+		  boost::archive::binary_iarchive ia(in);
         	  ia >> model;
                 }	
-		Trainer* sgd = new SimpleSGDTrainer(&model);
+		//Trainer* sgd = new SimpleSGDTrainer(&model);
 		sgd->eta_decay = 0.08;
-		EncoderDecoder<LSTMBuilder> lm(model);
+		//EncoderDecoder<LSTMBuilder> lm(model);
 		double best = 9e+99;
 		unsigned report_every_i = 100 ;
 	    unsigned dev_every_i_reports = 5;
@@ -478,42 +483,87 @@ int main(int argc, char** argv) {
 		}
 	}
 	 else {
-	 cerr << "Test 1";
-	 ifstream in3("targetDict");
+         Model model;
+	 //cerr << "Test 1";
+	 /*
+	 std::string name = argv[9];
+	 string target_in = name+".target";
+         cerr << "reading in " << name+".target\n";
+	 ifstream in3(target_in);
+         cerr << "... ";
 	 assert(in3);
+	 cerr << "... ";
 	 boost::archive::text_iarchive ia3(in3);
+	 cerr << "... ";
 	 ia3 >> targetD;
+	 cerr << "...";
 
 	 cerr << "Test 2";
-	 Model model;
-	 ifstream in("sourceDict");
+	 ifstream in(name+".source");
 	 assert(in);
 	 boost::archive::text_iarchive ia(in);
 	 ia >> sourceD;
+	 */
 
-
+	kSOS = sourceD.convert("<s>");
+		kEOS = sourceD.convert("</s>");
+		kSOS2 = targetD.convert("<s>");
+		kEOS2 = targetD.convert("</s>");
+		vector<vector<int>> train_source, train_target;
+		vector<vector<int>> dev_source, dev_target;
+		vector<vector<int>> test_source;
+		string line;
+		cerr << "converting source data...\n";
+		{
+		  ifstream in(argv[1]);
+		  assert(in);
+		  vector<int> x;
+		  string line;
+		  while(getline(in, line)) {
+		    x = read_sentence(line, &sourceD);
+		    train_source.push_back(x);
+		  }
+		}
+		sourceD.freeze();
+                sourceD.set_unk("<UNK>");
+		cerr << "converting target data...\n";
+		{
+		  ifstream in(argv[2]);
+		  assert(in);
+		  vector<int> x;
+		  string line;
+		  while(getline(in, line)) {
+		    x = read_sentence(line, &targetD);
+		    train_target.push_back(x);
+		  }
+		}
+		targetD.freeze();
+                targetD.set_unk("<UNK>");
+		VOCAB_SIZE = targetD.size() + sourceD.size();
 
 	 sourceD.freeze();
 	 targetD.freeze();
 	 VOCAB_SIZE = targetD.size();
 
-	 vector<vector<int>> test_source;
-
-	 ifstream in2("EDmodel");
+	EncoderDecoder<LSTMBuilder> tr(model);
+	cerr << "reading in saved model: " << argv[9] << "\n";
+	 ifstream in2(argv[9]);
 	 assert(in2);
 	 boost::archive::binary_iarchive ia2(in2);
 	 ia2 >> model;
+	cerr << "reading test data...\n";
 	 {
-	   ifstream in(argv[5]);
-	   assert(in);
+	   ifstream in0(argv[5]);
+	   assert(in0);
 	   vector<int> x;
 	   string line;
-	   while(getline(in, line)) {
+	   while(getline(in0, line)) {
 	     x = read_sentence(line, &sourceD);
 	     test_source.push_back(x);
 	   }
 	 }
-	 EncoderDecoder<LSTMBuilder> tr(model);
+	 cerr << "translating...\n";
+	 //EncoderDecoder<LSTMBuilder>(model);
 	 Translate(test_source, tr);
 	 }
 }
