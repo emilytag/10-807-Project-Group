@@ -198,12 +198,15 @@ void read_vectorfile(const std::string& line, int& word, std::vector<float>* vec
 vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBuilder>& tr){
 	vector<string> trans_sents;
 	//cerr << "TEST SIZE " << test_sents.size() << endl;
+  
   for(int i = 0; i < test_sents.size(); ++i) {
-  	//for (int j = 0; j < test_sents[i].size(); ++j) {
-  	//	cerr << sourceD.convert(test_sents[i][j]) << " ";
-  	//}
-  	//cerr << "\n";
-  	ComputationGraph cg;
+	/*
+  	for (int j = 0; j < test_sents[i].size(); ++j) {
+  		cerr << sourceD.convert(test_sents[i][j]) << " ";
+  	}
+  	cerr << "\n";
+	*/
+  	ComputationGraph cg;	
   	Expression encoding = tr.Encoder(cg, test_sents[i]);
   	Expression enc2dec = parameter(cg, tr.p_enc2dec);
   	Expression decbias = parameter(cg, tr.p_decbias);
@@ -230,7 +233,7 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	  	Expression probs_embedding = log_softmax(u_t);
 	  	//PrintExpression(probs_embedding, cg); 
  		vector<float> probs = as_vector(cg.incremental_forward(probs_embedding));
-                //cerr << probs.size() << "\n";
+                //cerr << probs.size() << "\n" << targetD.size() << " " << sourceD.size() << endl;
 	  	vector<pair<float, int>> prob_idx; // probabilities and indices
 	  	for (int k = 0; k < probs.size(); ++k) {
 	  	  prob_idx.push_back(make_pair(probs[k], k));
@@ -238,8 +241,13 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	  	}
 	  	sort(prob_idx.begin(), prob_idx.end(), comparator);
 	  	translation = prob_idx[0].second;
-	  	cerr << targetD.convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
+	  	//cerr << targetD.convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
+		//cerr << translation << targetD.size() << endl;
+		if(translation <= targetD.size()){
 	  	trans_sent.append(targetD.convert(translation));
+		}else{
+		trans_sent.append("<UNK>");
+		}
 	  	trans_sent.append(" ");
 	  	Expression x_t = lookup(cg, tr.p_c_target, translation);
 	  	h_t = tr.outbuilder.add_input(x_t);
@@ -540,10 +548,6 @@ int main(int argc, char** argv) {
 		targetD.freeze();
                 targetD.set_unk("<UNK>");
 		VOCAB_SIZE = targetD.size() + sourceD.size();
-
-	 sourceD.freeze();
-	 targetD.freeze();
-	 VOCAB_SIZE = targetD.size();
 
 	EncoderDecoder<LSTMBuilder> tr(model);
 	cerr << "reading in saved model: " << argv[9] << "\n";

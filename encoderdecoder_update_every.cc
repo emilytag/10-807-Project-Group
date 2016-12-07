@@ -170,7 +170,8 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	  	Expression u_t = affine_transform({outbias, enc2out, h_t});
 	  	Expression probs_embedding = log_softmax(u_t);
 	  	vector<float> probs = as_vector(cg.incremental_forward(probs_embedding));
-	  	vector<pair<float, int>> prob_idx; // probabilities and indices
+		//cerr << probs.size() << "\n" << targetD.size() << " " << sourceD.size() << endl;  
+		vector<pair<float, int>> prob_idx; // probabilities and indices
 	  	for (int k = 0; k < probs.size(); ++k) {
 	  	  prob_idx.push_back(make_pair(probs[k], k));
 		  //cout << probs[k] << " " << k << "\n";
@@ -178,12 +179,16 @@ vector<string> Translate(vector<vector<int>>&  test_sents, EncoderDecoder<LSTMBu
 	  	sort(prob_idx.begin(), prob_idx.end(), comparator);
 	  	translation = prob_idx[0].second;
 	  	//cerr << targetD.convert(translation) << " " << prob_idx[0].first << " " << prob_idx[0].second << "\n";
+		try{
 	  	trans_sent.append(targetD.convert(translation));
+		}catch(...){
+		trans_sent.append("<UNK>");
+		}
 	  	trans_sent.append(" ");
 	  	Expression x_t = lookup(cg, tr.p_c, translation);
 	  	h_t = tr.outbuilder.add_input(x_t);
  	 }
-	//cerr << "TRANS SENT " << trans_sent << endl;
+	cerr << trans_sent << endl;
 	trans_sents.push_back(trans_sent);
   }
   cerr << "\n"; 
@@ -198,7 +203,8 @@ int main(int argc, char** argv) {
 	    isTrain = false;
 	  }
 	}
-	if (argc != 5 && argc != 6 && argc != 7 && argc != 8) {
+ 	//std::cout << "Have " << argc << " arguments:" << std::endl;
+	if (argc != 6 && argc != 7 && argc != 8 && argc != 9) {
 	  cerr << "Usage: " << argv[0] << " train.source train.target dev.source dev.target [test.source] output.model [input.model] [-t]\n";
 	  return 1;
 	}
@@ -237,10 +243,11 @@ int main(int argc, char** argv) {
 		targetD.freeze();
                 targetD.set_unk("<UNK>");
 		VOCAB_SIZE = targetD.size() + sourceD.size();
-		ofstream out("targetDict");
+                std::string name = argv[7];
+		ofstream out(name+".target");
 		boost::archive::text_oarchive oa(out);
 		oa << targetD;
-		ofstream out2("sourceDict");
+		ofstream out2(name+".source");
 		boost::archive::text_oarchive oa2(out2);
 		oa2 << sourceD;
 		{
@@ -277,7 +284,7 @@ int main(int argc, char** argv) {
                   cerr << "Reading parameters from " << argv[7] << "...\n";
                   ifstream in(argv[7]);
                   assert(in);
-		  boost::archive::text_iarchive ia(in);
+		  boost::archive::binary_iarchive ia(in);
         	  ia >> model;
                 }	
 		Trainer* sgd = new SimpleSGDTrainer(&model);
@@ -342,8 +349,7 @@ int main(int argc, char** argv) {
 			         cerr << endl;
 			         cerr << "Current dev performance exceeds previous best, saving model" << endl;
 			         best = dloss;
-			         ofstream out("EDmodel");
-			         boost::archive::binary_oarchive oa(out);
+			         ofstream out("EDmodel")::archive::binary_oarchive oa(out);
 			         oa << model;
 
 					// Run through test set and print translation
@@ -390,15 +396,18 @@ int main(int argc, char** argv) {
 		}
 	}
 	 else {
+	 Model model;
+	 /*
+         std::string name = argv[8];
 	 cerr << "Test 1";
-	 ifstream in3("targetDict");
+	 ifstream in3(name+".target");
 	 assert(in3);
 	 boost::archive::text_iarchive ia3(in3);
 	 ia3 >> targetD;
 
 	 cerr << "Test 2";
 	 Model model;
-	 ifstream in("sourceDict");
+	 ifstream in(name+".source");
 	 assert(in);
 	 boost::archive::text_iarchive ia(in);
 	 ia >> sourceD;
@@ -408,10 +417,44 @@ int main(int argc, char** argv) {
 	 sourceD.freeze();
 	 targetD.freeze();
 	 VOCAB_SIZE = targetD.size();
-
+	 
 	 vector<vector<int>> test_source;
-
-	 ifstream in2("EDmodel");
+	 */
+	 kSOS = sourceD.convert("<s>");
+		kEOS = sourceD.convert("</s>");
+		kSOS2 = targetD.convert("<s>");
+		kEOS2 = targetD.convert("</s>");
+		vector<vector<int>> train_source, train_target;
+		vector<vector<int>> dev_source, dev_target;
+		vector<vector<int>> test_source;
+		string line;
+		{
+		  ifstream in(argv[1]);
+		  assert(in);
+		  vector<int> x;
+		  string line;
+		  while(getline(in, line)) {
+		    x = read_sentence(line, &sourceD);
+		    train_source.push_back(x);
+		  }
+		}
+		sourceD.freeze();
+                sourceD.set_unk("<UNK>");
+		{
+		  ifstream in(argv[2]);
+		  assert(in);
+		  vector<int> x;
+		  string line;
+		  while(getline(in, line)) {
+		    x = read_sentence(line, &targetD);
+		    train_target.push_back(x);
+		  }
+		}
+		targetD.freeze();
+                targetD.set_unk("<UNK>");
+		VOCAB_SIZE = targetD.size() + sourceD.size();
+	 EncoderDecoder<LSTMBuilder> tr(model);	
+	 ifstream in2(argv[7]);
 	 assert(in2);
 	 boost::archive::binary_iarchive ia2(in2);
 	 ia2 >> model;
@@ -425,7 +468,7 @@ int main(int argc, char** argv) {
 	     test_source.push_back(x);
 	   }
 	 }
-	 EncoderDecoder<LSTMBuilder> tr(model);
+	 //EncoderDecoder<LSTMBuilder> tr(model);
 	 Translate(test_source, tr);
 	 }
 }
